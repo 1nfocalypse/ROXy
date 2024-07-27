@@ -769,7 +769,6 @@ bool isTranslucentElement(std::string bitstr, uint32_t p, uint32_t q) {
             return false;
         }
     }
-
     return true;
 }
 
