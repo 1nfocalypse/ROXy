@@ -20,7 +20,7 @@
 ## Background
 Most proponents of cryptography are familiar with a hypothetical situation in which somebody forces another to give up their keys, i.e. an authoritarian state demanding a journalist to give up their keys. While the dogmatic argument is to respond "I'll never give up my keys!", it's more prudent to 
 consider a technical workaround. Thus is born plausibly deniable encryption (PDE), in which the agent under duress is able to provide a false key that decrypts the known ciphertext into something benign. While this form of cryptography is uncommon for a multitude of reasons, it's an interesting 
-bit of technology that acknowledges some of the weaknesses of traditional cryptography approaches. ROXy is a toy implementation of two schemes described by Ran Canetti et. al. in [this paper](https://link.springer.com/content/pdf/10.1007/BFb0052229.pdf), including a symmetric scheme and an asymmetric scheme. 
+bit of technology that acknowledges some of the weaknesses of traditional cryptographic approaches. ROXy is a toy implementation of two schemes described by Ran Canetti et. al. in [this paper](https://link.springer.com/content/pdf/10.1007/BFb0052229.pdf), including a symmetric scheme and an asymmetric scheme. 
 While not exactly as specified due to a lack of access to entropy-measuring instruments for true RNG, this toy demonstrates the capabilities and possibilities of these forms of cryptography, as well as showcases the mathematical and logical background for these schemes.
 
 ## Describing the Schemes
@@ -35,7 +35,7 @@ Naturally, this is not a practical system in contemporary times, as any other OT
 
 ### Asymmetric
 Additionally, Canetti and his coauthors offer multiple asymmetric schemes in their paper, although sufficiently more complex than the basic symmetric scheme. All described schemes are reliant on the construction of a set of finite length bitstrings he dubs Translucent sets, which postulate an encryption function $F$, 
-a hardcore predicate function $B$, and a trapdoor permutation $D$ for inversion. The construction employed by ROXy is the second defined as follows:
+a hardcore predicate function $B$, and a trapdoor permutation $D$ for inversion. The construction employed by ROXy is the second, defined as follows:
 
 
 - Let $t : s + k$.
