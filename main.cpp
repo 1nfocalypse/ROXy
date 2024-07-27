@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <time.h>
+#include <cmath>
 
 /*
  *     ____  ____ _  __     
@@ -33,15 +34,14 @@
 /* TO DO
  * [ ] TEST
  *  - Symm
- *  - Encryption *seems* to work, if decryption seems plausible check again.
- *  - Fails on symm true decryption
- *  - Untested on symm false decryption
  *  - A bit clunky
+ *  - test with undersized and oversized keys
+ *  - try and induce failure with long decoy
+ *  - test with same size decoy
  *  - Asymm
- *  - Untested
+ *  - TESTED
  * [ ] Refactor
  * [ ] TEST 2
- * [ ] Write README
  * [ ] Push
  */
 
@@ -54,7 +54,8 @@ void asymmEncrypt(); // encrypts with asymmetric encryption via translucent sets
 void symmDecrypt(); // decrypts with symmetric encryption via XOR
 void asymmDecrypt(); // decrypts with asymmetric encryption via translucent sets
 uint32_t customHash(uint32_t num); // used for efficient 32-bit uint seed generation
-uint32_t invertBBS(uint32_t prev, uint32_t p, uint32_t q); // inverts the current value of x0 via trapdoor permutation
+uint32_t invertRSA(uint32_t prev, uint32_t p, uint32_t q); // inverts the current value of x0 via trapdoor permutation
+uint32_t rsa(uint32_t p, uint32_t q, uint32_t seed); // rsa for round encoding
 std::string iterativeHash(std::string key, uint32_t tarlen); // pads a seed to tarlen bytes
 std::string strXOR(std::string x, std::string y); // bitwise XOR of two n-len bitstrings
 std::string strToBin(std::string str); // convert a string to binary representation
@@ -62,8 +63,8 @@ std::string binToStr(std::string str); // convert a bitstring to characters
 std::string constructTranslucentElement(); // constructs element of translucent set for asymmetric system
 std::string randomAsymmElement(); // returns a pseudorandom non-translucent 64 bit number as a bitstring
 std::vector<uint32_t> blumblumshub(uint32_t p1, uint32_t p2, uint32_t seed, uint32_t iterations); // CRNG
-bool isPrime(uint32_t num); // primality test for BBS verification
-bool bbsPredicate(uint32_t number); // hardcore predicate for blumblumshub, defined as a sum over GF2 of all elements.
+bool isPrime(uint32_t num); // primality tester
+bool hcpredicate(uint32_t number); // hardcore predicate for RSA, defined as a sum over GF2 of all elements.
 bool isTranslucentElement(std::string bitstr, uint32_t p, uint32_t q); // determines if a 64 bit bitstring is an element of St, returning 1 if it is, and 0 otherwise.
 // remember, this scheme is sender deniable, not receiver deniable. The receiver will always decode to the original text, presuming a bitflip did not occur.
 
@@ -414,6 +415,7 @@ void asymmEncrypt() {
     std::cout << "Please enter the name of the output file:" << std::endl;
     std::cout << "++++++++++++++++++++++++++++++++++++++++++++++++++++++++" << std::endl;
     std::getline(std::cin, outfileName);
+    outfileName += ".roxy";
     rawFile.open(path.c_str());
     if (rawFile.good()) {
         auto out = std::string();
@@ -424,6 +426,11 @@ void asymmEncrypt() {
         out.append(buf, 0, rawFile.gcount());
         line = out;
         rawFile.close();
+    }
+    else {
+        std::cout << "Unable to open encryption target. Returning to menu..." << std::endl;
+        rawFile.close();
+        return;
     }
     std::string bitstr;
     for (uint32_t i = 0; i < line.length(); ++i) {
@@ -438,7 +445,8 @@ void asymmEncrypt() {
             ciphertext += randomAsymmElement();
         }
     }
-    cryptoOut.open(outfileName);
+    ciphertext = binToStr(ciphertext);
+    cryptoOut.open(outfileName.c_str());
     cryptoOut << ciphertext;
     cryptoOut.close();
     std::cout << "Successfully wrote data." << std::endl;
@@ -476,8 +484,9 @@ void asymmDecrypt() {
         line = out;
         rawFile.close();
     }
+    line = strToBin(line);
     std::string bitBuffer, out;
-    for (uint32_t i = 0; i < (bitBuffer.length() / 64); ++i) {
+    for (uint32_t i = 0; i < (line.length() / 64); ++i) {
         bitBuffer = line.substr(i * 64, 64);
         if (isTranslucentElement(bitBuffer, p, q)) {
             out += '1';
@@ -577,14 +586,27 @@ std::string strToBin(std::string str) {
 // STATUS: Completed, error
 std::string binToStr(std::string str) {
     std::string retStr;
-    while (str.length() > 8) {
+    while (str.length() >= 8) {
         std::string testing = str.substr(0, 8);
         int num = std::stoi(str.substr(0, 8), 0, 2);
         char myChar = static_cast<char>(num);
         retStr += myChar;
-        str = str.substr(8, str.length());
+        str = str.substr(8, str.length()-8);
     }
     return retStr;
+}
+
+uint32_t rsa(uint32_t p, uint32_t q, uint32_t seed) {
+    uint32_t n = p * q;
+    uint32_t phi = (p - 1) * (q - 1);
+    uint32_t e = 17;
+    
+    uint64_t ciphertext = 1;
+    for (uint32_t i = 0; i < e; ++i) {
+        ciphertext = (ciphertext * seed) % n;
+    }
+
+    return ciphertext;
 }
 
 // constructTranslucentElement()
@@ -610,22 +632,27 @@ std::string constructTranslucentElement() {
     // done to illustrate BBS functionality - in reality, sender will only have n : n := p * q. In this toy, p,q are set.
     // In practicum, users should use p,q of cryptographic size (256/512 bits), along with a different seeding algorithm)
     uint32_t seed = customHash(time(0));
-    std::vector<uint32_t> randNum;
+    // original x0
+    seed = blumblumshub(p, q, seed, 17)[time(0) % 17];
+    uint32_t randNum = seed;
     std::vector<bool> predicates;
-    // std::vector<bool> x0;
     std::vector<bool> ciphertext;
-    // generate full element of translucent set
+
     for (uint32_t i = 0; i < k; ++i) {
         if (i != 0) {
-            seed = randNum[0];
+            randNum = rsa(p,q,randNum);
         }
-        randNum[0] = (blumblumshub(p, q, seed, 1))[0]; // generate initial x_0
-        predicates.push_back(bbsPredicate(randNum[0]));
+        predicates.push_back(hcpredicate(randNum));
     }
-    std::string x0 = std::bitset<32>(randNum[0]).to_string();
+    std::string x0 = std::bitset<32>(randNum).to_string();
     std::string predicateStr;
     for (uint32_t i = 0; i < k; ++i) {
-        predicateStr += static_cast<char>(predicates[i]);
+        if (predicates[i] == true) {
+            predicateStr += "1";
+        }
+        else {
+            predicateStr += "0";
+        }
     }
     std::string bitstring = x0 + predicateStr;
     return bitstring;
@@ -637,6 +664,7 @@ std::string randomAsymmElement() {
     std::string retstr;
     left = customHash(seed);
     right = customHash(left);
+    left = blumblumshub(83, 5639, left, 17)[left % 17];
     std::string strseed, strleft, strright, newl, newr;
     strleft = std::bitset<32>(left).to_string();
     strright = std::bitset<32>(right).to_string();
@@ -651,12 +679,12 @@ std::string randomAsymmElement() {
 
 // pq = n, trapdoor is BBS. p,q, retained as trapdoor information d.
 // defined B : [0, 1]^s -> [0,1]
-bool bbsPredicate(uint32_t number) {
+bool hcpredicate(uint32_t number) {
     std::string num = std::bitset<32>(number).to_string();
     int parity = 0;
     for (size_t i = 0; i < num.length(); ++i) {
         if (num[i] == '1') {
-            parity = (parity) + 1 % 2;
+            parity = (parity + 1) % 2;
         }
     }
     return static_cast<bool>(parity);
@@ -739,11 +767,14 @@ bool isTranslucentElement(std::string bitstr, uint32_t p, uint32_t q) {
             predicates[i] = false;
         }
     }
-    long int signedTmp = std::stol(x0, nullptr, 2);
+    long long int signedTmp = std::stoll(x0, 0, 2);
     uint32_t unsInt = static_cast<uint32_t>(signedTmp);
     for (uint32_t i = 0; i < 32; ++i) {
-        if (bbsPredicate(unsInt) == predicates[i]) {
-            unsInt = invertBBS(unsInt, p, q);
+        if (hcpredicate(unsInt) == predicates[i]) {
+            unsInt = invertRSA(unsInt, p, q);
+            if (unsInt == 0) {
+                std::cout << "Error: Unable to invert x0." << std::endl;
+            }
         }
         else {
             return false;
@@ -753,60 +784,44 @@ bool isTranslucentElement(std::string bitstr, uint32_t p, uint32_t q) {
     return true;
 }
 
-uint32_t invertBBS(uint32_t prev, uint32_t p, uint32_t q) {
-    // note: p = 6827, q = 4079;
-    // in order to find z :given a (ciphertext prev), find a equiv z^2 % n, find
-    // cx + dy
-    // cx - dy
-    // -cx + dy
-    // -cx - dy
-    // where:
-    /*
-    a equiv x^2 % p
-    a equiv y^2 % q
-    c equiv 1 mod p
-    c equiv 0 mod q
-    d equiv 0 mod p
-    d equiv 1 mod q
-    (via Chinese Remainder Theorem)
-    given primes p, q we find 
-    x equiv a^((p+1)/4) mod p
-    y equiv a^((q+1)/4) mod q
-    */
-    // so first we want to solve for x, y
-    uint32_t xpow = (p + 1) / 4, ypow = (q + 1) / 4;
-    uint32_t prevTmp, x, y;
-    for (uint32_t i = 0; i < xpow; ++i) {
-        x = (prev * prev) % p;
-    }
-    for (uint32_t i = 0; i < ypow; ++i) {
-        y = (prev * prev) % q;
-    }
-    // now we need to enumerate c,d
-    uint32_t c = 1, d = 1;
-    while (((c % p) != 1) && ((c % q) != 0)) {
-        ++c;
-    }
-    while (((d % q) != 1) && ((d % p) != 0)) {
-        ++d;
-    }
-    long int potentials[4];
-    uint32_t inversion = 0;
-    potentials[0] = (c * x) + (d * y);
-    potentials[1] = (c * x) - (d * y);
-    potentials[2] = ((-1 * c) * x) + (d * y);
-    potentials[3] = ((-1 * c) * x) - (d * y);
-    for (int i = 0; i < 4; ++i) {
-        if (potentials[i] > 0) {
-            long int guessedRoot = potentials[i] / potentials[i];
-            if ((guessedRoot * guessedRoot) == potentials[i]) {
-                inversion = potentials[i];
-                break;
-            }
+uint32_t invertRSA(uint32_t prev, uint32_t p, uint32_t q) {
+    uint32_t n = p * q;
+    uint32_t phi = (p - 1) * (q - 1);
+    uint32_t e = 17;
+    long long int prevrow[7];
+    long long int currow[7];
+    prevrow[0] = phi;
+    prevrow[1] = e;
+    prevrow[2] = phi / e;
+    prevrow[3] = phi - (prevrow[2] * prevrow[1]);
+    prevrow[4] = 0;
+    prevrow[5] = 1;
+    prevrow[6] = prevrow[4] - (prevrow[5] * prevrow[2]);
+
+    while (prevrow[3] != 0) {
+        currow[0] = prevrow[1];
+        currow[1] = prevrow[3];
+        currow[2] = currow[0] / currow[1];
+        currow[3] = currow[0] % (currow[1] * currow[2]);
+        currow[4] = prevrow[5];
+        currow[5] = prevrow[6];
+        currow[6] = currow[4] - (currow[5] * currow[2]);
+        for (uint32_t i = 0; i < 7; ++i) {
+            prevrow[i] = currow[i];
         }
     }
-    if (inversion == 0) {
-        return 0;
+    if (prevrow[5] < 0) {
+        prevrow[5] = phi + prevrow[5];
     }
-    return inversion;
+    uint32_t d = static_cast<uint32_t>(prevrow[5]);
+    // above yields known correct d for every valid e
+
+    unsigned long long int inversion = 1;
+    for (uint32_t i = 0; i < d; ++i) {
+        inversion = (inversion * prev) % n;
+        if (inversion == 0) {
+            std::cout << "ERROR: INVERSION FOUND TO BE 0 AT ITERATION " << i << std::endl;
+        }
+    }
+    return static_cast<uint32_t>(inversion);;
 }  
