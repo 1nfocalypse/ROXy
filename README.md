@@ -38,7 +38,7 @@ Additionally, Canetti and his coauthors offer multiple asymmetric schemes in the
 a hardcore predicate function $B$, and a trapdoor permutation $D$ for inversion. The construction employed by ROXy is the second, defined as follows:
 
 
-- Let $t : s + k$.
+- Let $t := s + k$.
 - Represent each $x \in \\{0, 1\\}^{t}$ as $x = x_{0}, b_{1},...,b_{k}$, where $x_{0} \in \\{0,1\\}^{s}$ and for $i \geq 1$ each $b_{i} \in \\{0, 1\\}$.
 - Then let $S_{t} = \\{x_{0}, b_{1},...b_{k} \in \\{0, 1\\}^{s+k} | \forall i = 1...k, B(f^{-i}(x_{0})) = b_{i}\\}$.
 
