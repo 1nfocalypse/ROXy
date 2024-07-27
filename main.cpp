@@ -31,21 +31,6 @@
  */
 
 
-/* TO DO
- * [ ] TEST
- *  - Symm
- *  - A bit clunky
- *  - test with undersized and oversized keys
- *  - try and induce failure with long decoy
- *  - test with same size decoy
- *  - Asymm
- *  - TESTED
- * [ ] Refactor
- * [ ] TEST 2
- * [ ] Push
- */
-
-
 // forward declarations
 void encrypt(); // launches encryption handler
 void decrypt(); // launches decryption handler
@@ -55,24 +40,24 @@ void symmDecrypt(); // decrypts with symmetric encryption via XOR
 void asymmDecrypt(); // decrypts with asymmetric encryption via translucent sets
 uint32_t customHash(uint32_t num); // used for efficient 32-bit uint seed generation
 uint32_t invertRSA(uint32_t prev, uint32_t p, uint32_t q); // inverts the current value of x0 via trapdoor permutation
-uint32_t rsa(uint32_t p, uint32_t q, uint32_t seed); // rsa for round encoding
+uint32_t rsa(uint32_t p, uint32_t q, uint32_t seed); // RSA for round encoding
 std::string iterativeHash(std::string key, uint32_t tarlen); // pads a seed to tarlen bytes
 std::string strXOR(std::string x, std::string y); // bitwise XOR of two n-len bitstrings
 std::string strToBin(std::string str); // convert a string to binary representation
 std::string binToStr(std::string str); // convert a bitstring to characters
 std::string constructTranslucentElement(); // constructs element of translucent set for asymmetric system
 std::string randomAsymmElement(); // returns a pseudorandom non-translucent 64 bit number as a bitstring
-std::vector<uint32_t> blumblumshub(uint32_t p1, uint32_t p2, uint32_t seed, uint32_t iterations); // CRNG
+std::vector<uint32_t> blumblumshub(uint32_t p1, uint32_t p2, uint32_t seed, uint32_t iterations); // CPRNG
 bool isPrime(uint32_t num); // primality tester
-bool hcpredicate(uint32_t number); // hardcore predicate for RSA, defined as a sum over GF2 of all elements.
+bool hcpredicate(uint32_t number); // hardcore predicate for RSA enciphering, defined as a sum over GF2 of all elements.
 bool isTranslucentElement(std::string bitstr, uint32_t p, uint32_t q); // determines if a 64 bit bitstring is an element of St, returning 1 if it is, and 0 otherwise.
-// remember, this scheme is sender deniable, not receiver deniable. The receiver will always decode to the original text, presuming a bitflip did not occur.
 
-// ctor
+
+// main()
 // PRE: Program starts
 // POST: Program halts
-// WARNINGS:
-// STATUS: Completed, untested
+// WARNINGS: None
+// STATUS: Completed, tested
 int main() {
     while (1) {
         std::string menChoiceProxy;
@@ -123,10 +108,10 @@ int main() {
 }
 
 // encrypt()
-// PRE:
-// POST:
-// WARNINGS:
-// STATUS: Completed, untested
+// PRE: Encrypt menu choice selected
+// POST: User displayed appropriate asymmetric or symmetric enciphering options
+// WARNINGS: None
+// STATUS: Completed, tested
 void encrypt() {
     std::string menChoiceProxy;
     std::cout << "++++++++++++++++++++++++++++++++++++++++++++++++++++++++" << std::endl;
@@ -158,10 +143,10 @@ void encrypt() {
 }
 
 // decrypt()
-// PRE:
-// POST:
-// WARNINGS:
-// STATUS: Completed, untested
+// PRE: Decrypt menu choice selected
+// POST: User displayed appropriate asymmetric or symmetric deciphering options
+// WARNINGS: None
+// STATUS: Completed, tested
 void decrypt() {
     std::string menChoiceProxy;
     std::cout << "--------------------------------------------------------" << std::endl;
@@ -193,10 +178,10 @@ void decrypt() {
 }
 
 // symmEncrypt()
-// PRE:
-// POST:
-// WARNINGS:
-// STATUS: need to convert back to char before write
+// PRE: User selects to symmetrically encrypt
+// POST: Keys and ciphertext outputted
+// WARNINGS: Failures to read or open targets may alter behavior.
+// STATUS: completed, tested
 void symmEncrypt() {
     std::string path, keyPath, decoyPath;
     std::string key, decoyKey;
@@ -249,7 +234,6 @@ void symmEncrypt() {
         return;
     }
     std::cout << "Successfully read key." << std::endl;
-    // decide which is longer, key or plaintext
     if (key.length() > line.length()) {
         key = key.substr(0, line.length());
     }
@@ -260,8 +244,6 @@ void symmEncrypt() {
     key = strToBin(key);
     line = strToBin(line);
     std::string ciphertext = strXOR(key, line);
-    // now we have the initial real data, the key, and the ciphertext
-    // next step is fake data XOR ciphertext = K2
     std::cout << "Successfully encrypted target with given key." << std::endl;
     std::cout << "Please enter the path to the decoy cleartext." << std::endl;
     std::cout << "Note: Decoy cannot exceed length of original cleartext!" << std::endl;
@@ -283,7 +265,6 @@ void symmEncrypt() {
         rawDecoy.close();
         return;
     }
-    // perform XOR operation to yield decoy key
     if (decoy.length() > asciiKey.length()) {
         std::cout << "Decoy too long! Returning to menu." << std::endl;
         return;
@@ -322,10 +303,10 @@ void symmEncrypt() {
 }
 
 // symmDecrypt()
-// PRE:
-// POST:
-// WARNINGS:
-// STATUS:
+// PRE: Symmetric decryption option selected
+// POST: Selected ciphertext decrypted with selected option's key
+// WARNINGS: Failures to read or open targets may alter behavior.
+// STATUS: completed, tested
 void symmDecrypt() {
     std::string path;
     std::string line;
@@ -368,28 +349,34 @@ void symmDecrypt() {
         keyRaw.close();
         return;
     }
-    // std::string key;
-    // First key is legitimate, second is for the decoy.
     if (menChoice == 1) {
-        // read in real key
         std::getline(keyRaw, key);
     }
     else {
-        // unwrapped 2x loop to pull fake key
         std::getline(keyRaw, key);
         std::getline(keyRaw, key);
     }
-    // close keyRaw
     keyRaw.close();
     cipherRaw.open(path);
-    // read cipher
-    std::getline(cipherRaw, ciphertext);
-    cipherRaw.close();
+    if (cipherRaw.good()) {
+        auto out = std::string();
+        auto buf = std::string(100, '\0');
+        while (cipherRaw.read(&buf[0], 100)) {
+            out.append(buf, 0, cipherRaw.gcount());
+        }
+        out.append(buf, 0, cipherRaw.gcount());
+        ciphertext = out;
+        cipherRaw.close();
+    }
+    else {
+        std::cout << "Failed to open cipher target. Returning to menu." << std::endl;
+        cipherRaw.close();
+        return;
+    }
     key = strToBin(key);
     ciphertext = strToBin(ciphertext);
     cleartext = strXOR(key, ciphertext);
     cleartext = binToStr(cleartext);
-    // write to output file
     std::cout << "Writing cleartext to " << outfileName << "..." << std::endl;
     outRaw.open(outfileName);
     outRaw << cleartext;
@@ -399,10 +386,10 @@ void symmDecrypt() {
 }
 
 // asymmEncrypt()
-// PRE:
-// POST:
-// WARNINGS:
-// STATUS:
+// PRE: User selected to asymmetrically encrypt
+// POST: Ciphertext outputted
+// WARNINGS: None
+// STATUS: completed, tested
 void asymmEncrypt() {
     std::string path;
     std::string outfileName;
@@ -456,10 +443,10 @@ void asymmEncrypt() {
 }
 
 // asymmDecrypt()
-// PRE:
-// POST:
-// WARNINGS:
-// STATUS:
+// PRE: User selected to decrypt asymmetrically encrypted data
+// POST: Cleartext restored
+// WARNINGS: 1/2^32 chance of a bitflip occuring - retransmission may be required
+// STATUS: Completed, tested
 void asymmDecrypt() {
     uint32_t p = 6827, q = 4079;
     std::string path;
@@ -505,7 +492,7 @@ void asymmDecrypt() {
 }
 
 // customHash(int32_t num)
-// PRE: linear equation of string sum is passed
+// PRE: 32 bit integer is passed
 // POST: 32 bits of hashed data yielded
 // WARNINGS: collisions may occur - collision resistance not tested
 // STATUS: Completed, tested.
@@ -570,7 +557,7 @@ std::string strXOR(std::string r, std::string k) {
 // PRE: A string is passed containing valid characters
 // POST: A bitstring of those characters is returned
 // WARNING: Invalid data types may be corrupted via this process.
-// STATUS: Completed, untested
+// STATUS: Completed, tested
 std::string strToBin(std::string str) {
     std::string binStr = "";
     for (uint32_t i = 0; i < str.length(); ++i) {
@@ -583,7 +570,7 @@ std::string strToBin(std::string str) {
 // PRE: A string of bits is passed
 // POST: A char converted string is returned
 // WARNING: Invalid data types may be corrupted via this process.
-// STATUS: Completed, error
+// STATUS: Completed, tested
 std::string binToStr(std::string str) {
     std::string retStr;
     while (str.length() >= 8) {
@@ -596,6 +583,11 @@ std::string binToStr(std::string str) {
     return retStr;
 }
 
+// rsa(uint32_t p, uint32_t q, uint32_t seed)
+// PRE: User is encrypting asymmetrically
+// POST: valid RSA ciphertext returned
+// WARNINGS: Large quantities of p,q,seed may result in overflow
+// STATUS: Completed, tested
 uint32_t rsa(uint32_t p, uint32_t q, uint32_t seed) {
     uint32_t n = p * q;
     uint32_t phi = (p - 1) * (q - 1);
@@ -610,27 +602,17 @@ uint32_t rsa(uint32_t p, uint32_t q, uint32_t seed) {
 }
 
 // constructTranslucentElement()
-// PRE: Two unsigned integers passed denoting size
-// POST: A set is constructed per Canetti et. al. construction 2
-// WARNING: 
-// STATUS: Incomplete, untested
-// COMMENTS: Using BBS to obtain trapdoor function, based on Rabin's Quadratic Residue Assumption. Since BBS can be utilized as a OWF,
-// we are able to establish a hardcore predicate of the form
-// n:= pq | p, q equiv 3 % 4
-// set X of int % n coprime to n && are quadratic residues (a value x : E int y : y^2 = x % n)
-// A quadratic residue coprime to n has 4 distrinct square roots, and exactly one of them is itself a quadratic residue.
-// Def F: x -> x^2 % n. E qudratic residue x : f(x) = y.
-// Define b(x) to be the XOR of all bits of the binary rep of x. Returns bool value. Given x, computation is hence trivial. Given f(x), computation is at least as hard as factoring n.
-// Now i just need to define the trapdoor function from Rabin's theorem.
-// Given n := pq | p, q equiv 3 % 4
-// Compute z given a : a = z^2 % n. Trapdoor is factorization of n. W/ trapdoor, sol of z given as cx + dy, cx - dy, -cx + dy, - cx - dy
-// where a equiv x^2 mod p, a = y^2 % q, c equiv 1 % p, c equiv 0 % q, d = 0 % p, d equiv 1 % q.
+// PRE: 1 is selected for encoding
+// POST: A set element is constructed per Canetti et. al. construction 2
+// WARNING: Time-based seeding produces vulnerabilities, should be quelled with BBS
+// Small p,q are easily breakable
+// STATUS: completed, tested
 std::string constructTranslucentElement() {
     uint32_t t = 64;
     uint32_t s = 32, k = 32; // P(0 dec as 1) = 1 / 2^32 apprx .000000000232, 2 bits/10 billion, approx 1 bitflip per 625 MB is E
     uint32_t p = 6827, q = 4079;
-    // done to illustrate BBS functionality - in reality, sender will only have n : n := p * q. In this toy, p,q are set.
-    // In practicum, users should use p,q of cryptographic size (256/512 bits), along with a different seeding algorithm)
+    // done to illustrate RSA functionality - in reality, public key is only predicate, e, n
+    // In practicum, users should use p,q of cryptographic size (256/512 bits), along with a different seeding algorithm
     uint32_t seed = customHash(time(0));
     // original x0
     seed = blumblumshub(p, q, seed, 17)[time(0) % 17];
@@ -658,6 +640,12 @@ std::string constructTranslucentElement() {
     return bitstring;
 }
 
+// randomAsymmElement()
+// PRE: 0 is selected for encoding
+// POST: A random 64 bit bitstring is returned
+// WARNING: Time-based seeding produces vulnerabilities, should be quelled with BBS
+// Small p,q are easily breakable
+// STATUS: completed, tested
 std::string randomAsymmElement() {
     uint32_t seed = time(0);
     uint32_t left, right;
@@ -677,8 +665,11 @@ std::string randomAsymmElement() {
     return retstr;
 }
 
-// pq = n, trapdoor is BBS. p,q, retained as trapdoor information d.
-// defined B : [0, 1]^s -> [0,1]
+// bool hcpredicate(uint32_t number) {
+// PRE: a translucent set is selected for encoding/testing for decoding
+// POST: A parity bit is returned based on a bitstring length sum over GF2
+// WARNING: None
+// STATUS: completed, tested
 bool hcpredicate(uint32_t number) {
     std::string num = std::bitset<32>(number).to_string();
     int parity = 0;
@@ -694,7 +685,7 @@ bool hcpredicate(uint32_t number) {
 // PRE: primes p1, p2, 32 bit uint seed, and number of iterations passed
 // POST: A CRNG number c is returned: c in [0, UINT32_MAX]
 // WARNING: Not actually secure; numbers too small.
-// STATUS: Complete, untested
+// STATUS: Complete, tested
 std::vector<uint32_t> blumblumshub(uint32_t p1, uint32_t p2, uint32_t seed, uint32_t iterations) {
     std::vector<uint32_t> empty;
     if ((p1 % 4) != 3) {
@@ -731,7 +722,7 @@ std::vector<uint32_t> blumblumshub(uint32_t p1, uint32_t p2, uint32_t seed, uint
 // PRE: number num passed
 // POST: Boolean value returned if prime or not
 // WARNING: overflow may occur
-// STATUS: Complete, untested
+// STATUS: Complete, tested
 bool isPrime(uint32_t num) {
     if (num == 2 || num == 3) {
         return true;
@@ -747,14 +738,12 @@ bool isPrime(uint32_t num) {
     return true;
 }
 
+// isTranslucentElement(uint32_t bitstr, uint32_t p, uint32_t q)
+// PRE: bitstrings + trapdoor primes p,q passed
+// POST: Boolean value returned if an element or not
+// WARNING: functions only as well as invertRSA, which may overflow depending on p,q
+// STATUS: Complete, tested
 bool isTranslucentElement(std::string bitstr, uint32_t p, uint32_t q) {
-    // hmm
-    // how do i wanna try and accomplish this
-    // obviously, we can just run a predicate on the current x_0
-    // if the predicate yields the correct predicate, then we invert
-    // if at any point the predicate does not match, then we reject as
-    // an element
-    // first isolate the predicate values, then flip them so the most recent is evaluated first
     std::string predicatesStr = bitstr.substr(32, 32);
     std::string x0 = bitstr.substr(0, 32);
     std::reverse(predicatesStr.begin(), predicatesStr.end());
@@ -784,6 +773,11 @@ bool isTranslucentElement(std::string bitstr, uint32_t p, uint32_t q) {
     return true;
 }
 
+// invertRSA(uint32_t prev, uint32_t p, uint32_t q)
+// PRE: x0 as an integer + trapdoor primes p,q passed
+// POST: deciphered value returned given args
+// WARNING: may overflow depending on p, q, seed
+// STATUS: Complete, tested
 uint32_t invertRSA(uint32_t prev, uint32_t p, uint32_t q) {
     uint32_t n = p * q;
     uint32_t phi = (p - 1) * (q - 1);
@@ -814,8 +808,6 @@ uint32_t invertRSA(uint32_t prev, uint32_t p, uint32_t q) {
         prevrow[5] = phi + prevrow[5];
     }
     uint32_t d = static_cast<uint32_t>(prevrow[5]);
-    // above yields known correct d for every valid e
-
     unsigned long long int inversion = 1;
     for (uint32_t i = 0; i < d; ++i) {
         inversion = (inversion * prev) % n;
