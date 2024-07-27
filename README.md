@@ -25,7 +25,7 @@ While not exactly as specified due to a lack of access to entropy-measuring inst
 
 ## Describing the Schemes
 ### Symmetric
-One of the symmetric schemes offered by Dr. Canetti and his peers is shockingly basic, yet effective, and returns a to an old but proven concept in cryptography, that being the One-Time Pad (OTP). Utilizing the well-known self-inverting (involution) property of XOR along with the security of the OTP, they
+One of the symmetric schemes offered by Dr. Canetti and his peers is shockingly basic, yet effective, and returns to an old but proven concept in cryptography, that being the One-Time Pad (OTP). Utilizing the well-known self-inverting (involution) property of XOR along with the security of the OTP, they
 propose a simple scheme described as follows:
 
 Given a cleartext $m$ and a key $k_{1}$, such that $|m| = |k_{1}|$, perform a bitwise XOR operation to yield a ciphertext $c$ such that $c = m \bigoplus k_{1}$. Prepare a chosen decoy cleartext $d$, such that $|d| = |m|$. From this, perform $c \bigoplus d$ to derive $k_{2}$, which will serve
